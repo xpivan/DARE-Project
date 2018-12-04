@@ -1,0 +1,20 @@
+{"SU_workflow":
+    [{"SU_calculation":
+        {"indice_name" : "SU",
+        "in_files" : "/Users/xavier/Projets/data/usecase/tasmax_day_CSIRO-Mk3L-1-2_historical_r1i2p1_18510101_20051231.nc",
+        "var_name" : "tasmax",
+        "slice_mode" : "JJA",
+        "out_unit" : "days",
+        "out_file" : null
+        },
+
+    "Average_SU":
+        {"user_indice" : {"indice_name": "tas", "calc_operation": "mean"},
+        "in_files" : "/Users/xavier/Projets/data/test/results/SU_calculation.nc",
+        "var_name" : "SU",
+        "slice_mode" : null,
+        "out_unit" : "days",
+        "out_file" : "/Users/xavier/Projets/data/test/results/SU_mean.nc"        
+        }
+    }]
+}
