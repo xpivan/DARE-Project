@@ -2,7 +2,7 @@
 Simple wrapper for icclim.indice.
 
 Run as follows:
-``python -m dispel4py.new.processor simple ./dispel4py_icclim.py -f node_input.json``
+``python -m dispel4py.new.processor simple ./dispel4py_icclim.py -f node_input_usecase_1.json``
 '''
 
 from dispel4py.workflow_graph import WorkflowGraph
@@ -39,19 +39,6 @@ class StreamProducer(GenericPE):
         self.write('output', inputs)
 
 
-class NetCDFLastProcessing(GenericPE):
-
-    def __init__(self):
-        GenericPE.__init__(self)
-        self._add_input('input')
-        self._add_output('output')
-
-    def _process(self, parameters):
-
-        icclim.indice(**parameters['input'][self.name])
-        self.write('output', parameters['input'])
-
-        
 su_calculation = NetCDFProcessing()
 su_calculation.name = 'SU_calculation'
 
