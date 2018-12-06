@@ -1,0 +1,57 @@
+{"SU_workflow":
+        [{"SU_calculation_r1i2p1":
+            {"indice_name" : "SU",
+            "in_files" : "tasmax_day_CSIRO-Mk3L-1-2_historical_r1i2p1_18510101_20051231.nc",
+            "var_name" : "tasmax",
+            "slice_mode" : "JJA",
+            "out_unit" : "days",
+            "out_file" : null
+            },
+
+        "Average_SU_r1i2p1":
+            {"user_indice" : {"indice_name": "tas", "calc_operation": "mean"},
+            "in_files" : "SU_calculation.nc",
+            "var_name" : "SU",
+            "slice_mode" : null,
+            "out_unit" : "days",
+            "out_file" : null       
+            },
+        
+        "SU_calculation_r2i2p1":
+            {"indice_name" : "SU",
+            "in_files" : "tasmax_day_CSIRO-Mk3L-1-2_historical_r2i2p1_18510101_20051231.nc",
+            "var_name" : "tasmax",
+            "slice_mode" : "JJA",
+            "out_unit" : "days",
+            "out_file" : null
+            },
+
+        "Average_SU_r2i2p1":
+            {"user_indice" : {"indice_name": "tas", "calc_operation": "mean"},
+            "in_files" : "SU_calculation.nc",
+            "var_name" : "SU",
+            "slice_mode" : null,
+            "out_unit" : "days",
+            "out_file" : null       
+            },
+
+        "SU_calculation_r3i2p1":
+            {"indice_name" : "SU",
+            "in_files" : "tasmax_day_CSIRO-Mk3L-1-2_historical_r3i2p1_18510101_20051231.nc",
+            "var_name" : "tasmax",
+            "slice_mode" : "JJA",
+            "out_unit" : "days",
+            "out_file" : null
+            },
+    
+        "Average_SU_r3i2p1":
+            {"user_indice" : {"indice_name": "tas", "calc_operation": "mean"},
+            "in_files" : "SU_calculation_r3i2p1.nc",
+            "var_name" : "SU",
+            "slice_mode" : null,
+            "out_unit" : "days",
+            "out_file" : null        
+            }
+        }]
+}
+
