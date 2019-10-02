@@ -503,5 +503,3 @@ with open(json_path) as json_data:
 clim_workflow = Multiple_scenario(param=input_C4I)
 clim_workflow.multiple_scenario()
 
-from dispel4py.new import simple_process
-result = simple_process.process_and_return(clim_workflow, input_C4I)
