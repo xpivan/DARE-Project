@@ -1,170 +1,19 @@
 import json
 import pdb
-import pe_enes as ps
+
 from dispel4py.workflow_graph import WorkflowGraph
 from dispel4py.base import IterativePE, ProducerPE, ConsumerPE
 from dispel4py.core import GenericPE
-
-""" 
-A Python program to demonstrate the adjacency 
-list representation of the graph 
-"""
-
-map_proc_elem = {"0":"PreProcess_multiple_scenario",
-"1":"IcclimProcessing",
-"2":"StreamProducer",
-"3":"NetCDF2xarray",
-"4":"ReadNetCDF",
-"5":"StandardDeviation",
-"6":"AverageData",
-"7":"CombineScenario",
-"8":"PlotMultipleScenario",
-"9":"B2DROP"}
-
-#TODO add a proc elem to create netcdf for standarddeviation and AverageData
-
-src_to_dest = {"0":[1],
-		"1":[1,5,6,9],
-		"2":[1],
-		"3":[None],
-		"4":[5,6],
-		"5":[7],
-		"6":[7],
-		"7":[8],
-		"8":[9]}
-
-prev_proc_required = {"0":[None],
-		"1":[0],
-		"2":[None],
-		"3":[None],
-		"4":[1],
-		"5":[4],
-		"6":[4],
-		"7":[5,6],
-		"8":[7]
-}
-
-		
-class Climate_Workflow(WorkflowGraph):
-
-	def __init__(self, param):
-		
-		WorkflowGraph.__init__(self)
-		self.param = param
-		self.preprocess = None
-		self.num_block = 1
-		self.nb_block = len(param)
-		self.combine_proc_elem = None
-
-		#Check B2DROP id
-		param_workflow = self.param['Workflow'][0]
-		b2drop = [i for i in [*param_workflow] if 'B2DROP' in i]
-		if b2drop:
-			self.b2drop_id = param_workflow[b2drop[0]]
-
-	def create_workflow(self, **kwargs):
-		
-		param = self.param['PE']
-		name_first_pe = [*self.param][0]
-		prev_proc_elem = self.preprocess
-
-		list_kwargs = [*kwargs]
-
-		if 'scenario' in kwargs:
-			scenario_name = kwargs['scenario']
-		else:
-			scenario_name = ""
-
-		num_block=self.num_block
-		list_block=[*param]
-		block = list_block[num_block-1]
-
-		nb_nodes = len(param[block])
-		num_node = 1
-		list_proc_elem = []
-
-		for node in param[block]:
-
-			if num_block>1 and num_node==1:
-				prev_proc_elem = self.combine_proc_elem
-				num_node+=1
-				continue
-
-			elif num_block==1 and num_node==1:
-				prev_prov_elem=self.preprocess
-
-			for proc_elem in param[block][node]:
-
-				if num_node>1 and list_proc_elem:
-					prev_proc_elem = list_proc_elem[0]
-
-				name_proc_elem = '{0}_{1}_{2}'.format(node,proc_elem[:-2],scenario_name)
-
-				try:
-					if proc_elem=='B2DROP()':
-						exec(name_proc_elem+"=ps."+proc_elem[:-2]+"(self.b2drop_id)")
-						exec(name_proc_elem+".name=name_proc_elem")
-					else:
-						exec(name_proc_elem+"=ps."+proc_elem)
-						exec(name_proc_elem+".name=name_proc_elem")
-				except AssertionError as error:
-					print(error)
-
-				#This condition aims to connect the last node of one block with the next block
-				if num_node==nb_nodes and num_block<self.nb_block:
-					self.connect(eval(name_proc_elem), 'output', self.combine_proc_elem, scenario_name)
-
-				list_proc_elem.append(eval(name_proc_elem))
-
-				#print('{0}  {1}'.format(prev_proc_elem.name, name_proc_elem))
-
-				self.connect(prev_proc_elem, 'output', eval(name_proc_elem), 'input')
-
-			num_node+=1
-
-
-
-class Multiple_scenario(Climate_Workflow):
-
-	def __init__(self, param):
-		Climate_Workflow.__init__(self, param)
-		name_first_node = [*self.param['Workflow'][0]][0]
-		self.nb_scenario = len(self.param['Workflow'][0][name_first_node]['in_files'])
-		self.combine_proc_elem = None
-		self.multiple_scenario_ = True
-		self.nb_block = len(self.param['PE'])
-
-	def multiple_scenario(self):
-
-		#Main preprocessing element 
-		preprocess = ps.PreProcess_multiple_scenario()
-		preprocess.name = "Workflow"
-		self.preprocess = preprocess
-
-		#Processing element to combine the multiple scenario
-		if self.nb_block>1:
-			combine_proc_elem = ps.CombineScenario(self.nb_scenario)
-			combine_proc_elem.name = "combine_scenario"
-			self.combine_proc_elem = combine_proc_elem
-	
-		param_workflow = self.param['PE']
-
-		for block in param_workflow:
-
-			if block=='Block_1':	
-				for scenario in range(self.nb_scenario):
-					scenario_name = "scenario_"+str(scenario+1)
-					kwargs = {'scenario':scenario_name}
-					self.create_workflow(**kwargs)
-			elif block=='Block_2':
-				self.create_workflow()	
-
-			self.num_block+=1
+from collections import OrderedDict
+import sys
 
 save_path = '/tmp/'
 
 def check_order(inputs):
-    list_key = [*inputs]
+    if sys.version[0]=='3':
+        list_key = [*inputs]
+    else:
+        list_key = inputs.keys()
     list_key.sort()
     new_inputs = OrderedDict()
     for input_name in list_key:
@@ -178,7 +27,11 @@ def remove_absolute_path(string_name, charact):
 
 def map_multiple_scenario(inputs):
     #create dictionary to map the scenario
-    first_node = [*inputs][0]
+
+    if sys.version[0]=='3':
+        first_node = [*inputs][0]
+    else:
+        first_node = inputs.keys()[0]
     list_scenario = inputs[first_node]['in_files']
     nb_scenario = len(list_scenario)
 
@@ -223,14 +76,12 @@ class IcclimProcessing(GenericPE):
     def _process(self, parameters):
         #Find PE named PE{num}_IcclimProcessing
 
-        pdb.set_trace()
-
         from icclim import icclim
 
         ind_scenario = self.name.find("scenario_")
         name_scenario = self.name[ind_scenario::]
         name_node = self.name[:ind_scenario-1]
-        pdb.set_trace()
+
         param = parameters['input'][name_node]
         path_files = parameters['input']
 
@@ -410,7 +261,10 @@ class CombineScenario(GenericPE):
     def _process(self, inputs):
         import numpy as np
         
-        name_scenario = [*inputs][0]
+        if sys.version[0]=='3':
+            name_scenario = [*inputs][0]
+        else:
+            name_scenario = inputs.keys()[0]
 
         if self.count==0:
             self.time = inputs[name_scenario][0]
@@ -438,16 +292,20 @@ class PlotMultipleScenario(GenericPE):
 
     def _process(self, parameters):
 
+        import matplotlib
+        matplotlib.use('agg')
         import matplotlib.pyplot as plt
         import numpy as np
-        #plt.switch_backend('agg')
-        name_var = [*parameters][0]
+
+        if sys.version[0]=='3':
+            name_var = [*parameters][0]
+        else:
+            name_var = parameters.keys()[0]
 
         time = parameters[name_var][0]
         var = parameters[name_var][1]
         year_list = np.array([t.year for t in time])
         #year_array = np.tile(year_list,(len(var),1))
-
 
         plt.figure()
         for i in range(len(var)):
@@ -496,12 +354,203 @@ class B2DROP(GenericPE):
         print("Shared linked is: "+link_info.get_link())
 
 
-json_path = 'input_C4I.json'
-with open(json_path) as json_data:
-	input_C4I = json.load(json_data)
+""" 
+A Python program to demonstrate the adjacency 
+list representation of the graph 
+"""
 
-clim_workflow = Multiple_scenario(param=input_C4I)
+map_proc_elem = {"0":"PreProcess_multiple_scenario",
+"1":"IcclimProcessing",
+"2":"StreamProducer",
+"3":"NetCDF2xarray",
+"4":"ReadNetCDF",
+"5":"StandardDeviation",
+"6":"AverageData",
+"7":"CombineScenario",
+"8":"PlotMultipleScenario",
+"9":"B2DROP"}
+
+#TODO add a proc elem to create netcdf for standarddeviation and AverageData
+
+src_to_dest = {"0":[1],
+		"1":[1,5,6,9],
+		"2":[1],
+		"3":[None],
+		"4":[5,6],
+		"5":[7],
+		"6":[7],
+		"7":[8],
+		"8":[9]}
+
+prev_proc_required = {"0":[None],
+		"1":[0],
+		"2":[None],
+		"3":[None],
+		"4":[1],
+		"5":[4],
+		"6":[4],
+		"7":[5,6],
+		"8":[7]
+}
+
+		
+class Climate_Workflow(WorkflowGraph):
+
+    def __init__(self, param):
+        
+        WorkflowGraph.__init__(self)
+        self.param = param
+        self.preprocess = None
+        self.num_block = 1
+        self.nb_block = len(param)
+        self.combine_proc_elem = None
+
+        #Check B2DROP id
+        param_workflow = self.param['Workflow'][0]
+        list_param_workflow = param_workflow.keys()
+        #b2drop = [i for i in [*param_workflow] if 'B2DROP' in i]
+        b2drop = [i for i in list_param_workflow if 'B2DROP' in i]
+        if b2drop:
+            self.b2drop_id = param_workflow[b2drop[0]]
+
+    def create_workflow(self, **kwargs):
+        
+        param_workflow = self.param['PE']
+
+        if sys.version[0]=='3':
+            name_first_pe = [*self.param][0]
+            param_workflow_keys = [*param_workflow]
+        else:
+            name_first_pe = self.param.keys()[0]
+            param_workflow_keys = param_workflow.keys()
+
+        param = OrderedDict()
+
+        for block in param_workflow_keys:
+            param[block] = OrderedDict()
+            if sys.version[0]=='3':
+                list_node = [*param_workflow[block]]
+            else:
+                list_node = param_workflow[block].keys()
+            list_node.sort()
+            for node in list_node:
+                param[block][node] = param_workflow[block][node]
+
+        #Below line only works for python3
+        #name_first_pe = [*self.param][0]
+        prev_proc_elem = self.preprocess
+        
+        #Below line only works for python3
+        #list_kwargs = [*kwargs]
+        list_kwargs = kwargs.keys()
+
+        if 'scenario' in kwargs:
+            scenario_name = kwargs['scenario']
+        else:
+            scenario_name = ""
+
+        num_block=self.num_block
+
+        if sys.version[0]=='3':
+            list_block=[*param] 
+        else:
+            list_block=param.keys()
+        block = list_block[num_block-1]
+
+        nb_nodes = len(param[block])
+        num_node = 1
+        list_proc_elem = []
+        
+        for node in param[block]:
+
+            if num_block>1 and num_node==1:
+                prev_proc_elem = self.combine_proc_elem
+                num_node+=1
+                continue
+            
+            elif num_block==1 and num_node==1:
+                prev_prov_elem=self.preprocess
+            
+            for proc_elem in param[block][node]:
+                
+                if num_node>1 and list_proc_elem:
+                    prev_proc_elem = list_proc_elem[0]
+
+                name_proc_elem = '{0}_{1}_{2}'.format(node,proc_elem[:-2],scenario_name)
+                
+                try:
+                    if proc_elem=='B2DROP()':
+                        exec(name_proc_elem+"="+proc_elem[:-2]+"(self.b2drop_id)")
+                        exec(name_proc_elem+".name=name_proc_elem")
+                    else:
+                        exec(name_proc_elem+"="+proc_elem)
+                        exec(name_proc_elem+".name=name_proc_elem")
+                except AssertionError as error:
+                    print(error)
+                
+                #This condition aims to connect the last node of one block with the next block
+                if num_node==nb_nodes and num_block<self.nb_block:
+                    self.connect(eval(name_proc_elem), 'output', self.combine_proc_elem, scenario_name)
+
+                list_proc_elem.append(eval(name_proc_elem))
+
+                #print('{0}  {1}'.format(prev_proc_elem.name, name_proc_elem))
+
+                self.connect(prev_proc_elem, 'output', eval(name_proc_elem), 'input')
+
+            num_node+=1
+
+
+
+class Multiple_scenario(Climate_Workflow):
+
+    def __init__(self, param):
+        Climate_Workflow.__init__(self, param)
+        #Below line only works for python3
+
+        if sys.version[0]=='3':
+            name_first_node = [*self.param['Workflow'][0]][0]
+        else:
+            name_first_node = self.param['Workflow'][0].keys()[0]
+        self.nb_scenario = len(self.param['Workflow'][0][name_first_node]['in_files'])
+        self.combine_proc_elem = None
+        self.multiple_scenario_ = True
+        self.nb_block = len(self.param['PE'])
+
+    def multiple_scenario(self):
+
+        #Main preprocessing element 
+        preprocess = PreProcess_multiple_scenario()
+        preprocess.name = "Workflow"
+        self.preprocess = preprocess
+        
+        #Processing element to combine the multiple scenario
+        if self.nb_block>1:
+            combine_proc_elem = CombineScenario(self.nb_scenario)
+            combine_proc_elem.name = "combine_scenario"
+            self.combine_proc_elem = combine_proc_elem
+        
+        
+        param_workflow = self.param['PE']
+
+        for block in param_workflow:
+
+            if block=='Block_1':	
+                for scenario in range(self.nb_scenario):
+                    scenario_name = "scenario_"+str(scenario+1)
+                    kwargs = {'scenario':scenario_name}
+                    self.create_workflow(**kwargs)
+                   
+            elif block=='Block_2':
+                self.create_workflow()	
+
+            self.num_block+=1
+
+conf_filename_path = "input_C4I.json"
+with open(conf_filename_path) as inputfile:
+    input_data = json.load(inputfile)
+
+from generic_workflow import Multiple_scenario
+
+clim_workflow = Multiple_scenario(param=input_data)
 clim_workflow.multiple_scenario()
-
-from dispel4py.new import simple_process
-result = simple_process.process_and_return(clim_workflow, input_C4I)
