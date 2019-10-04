@@ -553,4 +553,7 @@ with open(conf_filename_path) as inputfile:
 from generic_workflow import Multiple_scenario
 
 clim_workflow = Multiple_scenario(param=input_data)
-clim_workflow.multiple_scenario()
+graph = clim_workflow.multiple_scenario()
+
+#from dispel4py.new import simple_process
+#result = simple_process.process_and_return(clim_workflow, input_data)
