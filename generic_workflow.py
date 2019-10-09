@@ -1,11 +1,14 @@
 import json
 import pdb
-
-from dispel4py.workflow_graph import WorkflowGraph
-from dispel4py.base import IterativePE, ProducerPE, ConsumerPE
-from dispel4py.core import GenericPE
+import os
 from collections import OrderedDict
 import sys
+
+from dispel4py.examples.graph_testing import testing_PEs as t
+from dispel4py.workflow_graph import WorkflowGraph
+from dispel4py.core import GenericPE, NAME, TYPE, GROUPING
+from dispel4py.base import SimpleFunctionPE, IterativePE, BasePE
+from dispel4py.provenance import *
 
 save_path = '/tmp/'
 
@@ -77,7 +80,6 @@ class IcclimProcessing(GenericPE):
         #Find PE named PE{num}_IcclimProcessing
 
         from icclim import icclim
-
         ind_scenario = self.name.find("scenario_")
         name_scenario = self.name[ind_scenario::]
         name_node = self.name[:ind_scenario-1]
@@ -518,18 +520,15 @@ class Multiple_scenario(Climate_Workflow):
         self.nb_block = len(self.param['PE'])
 
     def multiple_scenario(self):
-
         #Main preprocessing element 
         preprocess = PreProcess_multiple_scenario()
         preprocess.name = "Workflow"
         self.preprocess = preprocess
-        
         #Processing element to combine the multiple scenario
         if self.nb_block>1:
             combine_proc_elem = CombineScenario(self.nb_scenario)
             combine_proc_elem.name = "combine_scenario"
             self.combine_proc_elem = combine_proc_elem
-        
         
         param_workflow = self.param['PE']
 
@@ -546,14 +545,71 @@ class Multiple_scenario(Climate_Workflow):
 
             self.num_block+=1
 
-conf_filename_path = "input_C4I.json"
+
+conf_filename_path = "/home/mpiuser/sfs/uploads/Th1s4sY0urT0k3Nn_wp7-input/input_C4I.json"
+#conf_filename_path = "input_C4I.json"
+
 with open(conf_filename_path) as inputfile:
     input_data = json.load(inputfile)
 
-from generic_workflow import Multiple_scenario
+graph = Multiple_scenario(param=input_data)
+graph.multiple_scenario()
 
-clim_workflow = Multiple_scenario(param=input_data)
-graph = clim_workflow.multiple_scenario()
 
-#from dispel4py.new import simple_process
-#result = simple_process.process_and_return(clim_workflow, input_data)
+"""
+ProvenanceType.REPOS_URL='http://'+os.getenv('SPROV_SERVICE_HOST')+':'+os.getenv('SPROV_SERVICE_PORT')+'/workflowexecutions/insert'
+ProvenanceType.PROV_EXPORT_URL='http://'+os.getenv('SPROV_SERVICE_HOST')+':'+os.getenv('SPROV_SERVICE_PORT')+'/workflowexecutions/'
+
+#Store to local path
+ProvenanceType.PROV_PATH='./prov-files/'
+
+#Size of the provenance bulk before sent to storage or sensor
+ProvenanceType.BULK_SIZE=1
+
+prov_config =  {
+    'provone:User': "cc4idev",
+    's-prov:description' : "enes_multiple_scenarios",
+    's-prov:workflowName': "enes_multiple_scenarios",
+    's-prov:workflowType': "climate:preprocess",
+    's-prov:workflowId'  : "workflow process",
+    's-prov:save-mode'   : 'service'         ,
+    's-prov:WFExecutionInputs':  [{
+        "url": "",
+        "mime-type": "text/json",
+        "name": "input_data"
+
+    }],
+    # defines the Provenance Types and Provenance Clusters for the Workflow Components
+   #  's-prov:componentsType' :
+   #      {self.calc_operation.getValue()+'_Spatial_MEAN': {'s-prov:type':(AccumulateFlow,),
+   #                                                        's-prov:prov-cluster':'enes:Processor'},
+   #       self.calc_operation.getValue()+'_Spatial_STD': {'s-prov:type':(AccumulateFlow,),
+   #                                                       's-prov:prov-cluster':'enes:Processor'},
+   #       self.calc_operation.getValue()+'_workflow': {'s-prov:type':(icclimInputParametersDataProvType,),
+   #                                                    's-prov:prov-cluster':'enes:dataHandler'},
+         #             'PE_filter_bandpass': {'s-prov:type':(SeismoPE,),
+         #                                                     's-prov:prov-cluster':'seis:Processor'},
+         #             'StoreStream':    {'s-prov:prov-cluster':'seis:DataHandler',
+         #                                's-prov:type':(SeismoPE,)},
+    #     }
+    #            's-prov:sel-rules': None
+}
+
+# rid='JUP_ENES_PREPOC_'+getUniqueId()
+
+# self.status.set("Initialising Provenance...", 25)
+
+#Initialise provenance storage to service:
+configure_prov_run(graph,
+                   provImpClass=(ProvenanceType,),
+                   input=prov_config['s-prov:WFExecutionInputs'],
+                   username=prov_config['provone:User'],
+                   runId=os.getenv('RUN_ID'),
+                   description=prov_config['s-prov:description'],
+                   workflowName=prov_config['s-prov:workflowName'],
+                   workflowType=prov_config['s-prov:workflowType'],
+                   workflowId=prov_config['s-prov:workflowId'],
+                   save_mode=prov_config['s-prov:save-mode'],
+                   # componentsType=prov_config['s-prov:componentsType']
+                   #                           sel_rules=prov_config['s-prov:sel-rules']
+                   )"""
