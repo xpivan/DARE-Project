@@ -10,7 +10,6 @@ from dispel4py.core import GenericPE, NAME, TYPE, GROUPING
 from dispel4py.base import SimpleFunctionPE, IterativePE, BasePE
 from dispel4py.provenance import *
 
-save_path = '/tmp/'
 
 def check_order(inputs):
     if sys.version[0]=='3':
@@ -395,7 +394,6 @@ prev_proc_required = {"0":[None],
 		"8":[7]
 }
 
-		
 class Climate_Workflow(WorkflowGraph):
 
     def __init__(self, param):
@@ -546,15 +544,37 @@ class Multiple_scenario(Climate_Workflow):
             self.num_block+=1
 
 
-conf_filename_path = "/home/mpiuser/sfs/uploads/Th1s4sY0urT0k3Nn_wp7-input/input_C4I.json"
-#conf_filename_path = "input_C4I.json"
+input_data = {
+    "Workflow": 
+       [{
+          "Node_1_IcclimProcessing":{
+             "out_file": None,
+             "slice_mode": "JJA",
+             "user_indice": None,
+             "indice_name": "SU",
+             "in_files": [["https://esgdata.gfdl.noaa.gov/thredds/dodsC/gfdl_dataroot4/CMIP/NOAA-GFDL/GFDL-CM4/historical/r1i1p1f1/day/tas/gr1/v20180701/tas_day_GFDL-CM4_historical_r1i1p1f1_gr1_20100101-20141231.nc"],
+                ["https://esgdata.gfdl.noaa.gov/thredds/dodsC/gfdl_dataroot4/CMIP/NOAA-GFDL/GFDL-CM4/historical/r1i1p1f1/day/tas/gr2/v20180701/tas_day_GFDL-CM4_historical_r1i1p1f1_gr2_20100101-20141231.nc"]],
+             "var_name": "tas"
+           },
+ 
+          "Node_5_B2DROP":{
+             "username": "7f64f56c-a286-48fe-bf74-96567edef0d2",
+             "password": "wWEqq-Qondr-7ZmqZ-ZRKrs-idDHJ"
+          }
+        }],
+ 
+    "PE":{"Block_1":{"Node_1":["IcclimProcessing()"],
+          "Node_2":["AverageData()"]},
+          "Block_2":{"Node_3":["CombineScenario()"],
+          "Node_4":["PlotMultipleScenario()"],
+          "Node_5":["B2DROP()"]}
+       }
+ }
 
-with open(conf_filename_path) as inputfile:
-    input_data = json.load(inputfile)
+
 
 graph = Multiple_scenario(param=input_data)
 graph.multiple_scenario()
-
 
 """
 ProvenanceType.REPOS_URL='http://'+os.getenv('SPROV_SERVICE_HOST')+':'+os.getenv('SPROV_SERVICE_PORT')+'/workflowexecutions/insert'
