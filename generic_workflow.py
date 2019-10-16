@@ -636,3 +636,4 @@ input_data = {
 graph = Multiple_scenario(param=input_data)
 graph.multiple_scenario()
 
+
