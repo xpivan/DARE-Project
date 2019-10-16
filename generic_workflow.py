@@ -10,6 +10,10 @@ from dispel4py.core import GenericPE, NAME, TYPE, GROUPING
 from dispel4py.base import SimpleFunctionPE, IterativePE, BasePE
 from dispel4py.provenance import *
 
+MONITOR_JSON = 'monitor_workflow.json'
+FOLDER_B2DROP = 'enes_usecase'
+PARAM_B2DROP = {'username':"7f64f56c-a286-48fe-bf74-96567edef0d2",
+            'password':"wWEqq-Qondr-7ZmqZ-ZRKrs-idDHJ"}
 
 def check_order(inputs):
     if sys.version[0]=='3':
@@ -22,6 +26,13 @@ def check_order(inputs):
         new_inputs[input_name] = inputs[input_name]
     return new_inputs
 
+def login_b2drop():
+    import owncloud
+    username = PARAM_B2DROP['username']
+    password = PARAM_B2DROP['password']
+    oc = owncloud.Client('https://b2drop.eudat.eu')
+    oc.login(username, password)
+    return oc
 
 def remove_absolute_path(string_name, charact):
     pos_char = [pos for pos, char in enumerate(string_name) if char == charact]
@@ -83,25 +94,59 @@ class IcclimProcessing(GenericPE):
         name_scenario = self.name[ind_scenario::]
         name_node = self.name[:ind_scenario-1]
 
+        #update_monitoring_file(self.name)
+
         param = parameters['input'][name_node]
         path_files = parameters['input']
+
+        if 'b2drop' in path_files['in_files'][name_scenario][0]:
+            filename = []
+            i = 0
+            for file_ in path_files['in_files'][name_scenario]:
+                import requests
+
+                r = requests.get(file_)
+
+                with open('tmp_scenario_'+str(name_scenario)+'_'+str(i)+'.nc', 'wb') as f:
+                        f.write(r.content)
+
+                filename.append('tmp_scenario_'+str(name_scenario)+'_'+str(i)+'.nc')
+                i+=1
+
+        else:
+            filename = path_files['in_files'][name_scenario]
+
+        output_file = path_files['out_file'][name_scenario]
 
         icclim_param = {
             'indice_name':param['indice_name'],
             'slice_mode':param['slice_mode'],
             'var_name':param['var_name'],
-            'in_files':path_files['in_files'][name_scenario],
-            'out_file':path_files['out_file'][name_scenario]
+            'in_files':filename,
+            'out_file':output_file
         }
 
         icclim.indice(**icclim_param)
 
+        b2drop_key = [node for node in parameters['input'].keys() if 'B2DROP' in node][0]
+
+        if b2drop_key:
+            oc=login_b2drop()
+            oc.put_file(FOLDER_B2DROP+'/'+output_file, output_file)
+
+        if 'b2drop' in path_files['in_files'][name_scenario][0]:
+            for file_ in filename:
+                os.remove(file_)
+
         self.write('output', ({'out_file':path_files['out_file'][name_scenario],
         'indice_name':param['indice_name']}))
 
+
 class PreProcess_multiple_scenario(GenericPE):
-    def __init__(self):
+    def __init__(self, param_workflow, nb_scenario):
         GenericPE.__init__(self)
+        self.param_workflow = param_workflow
+        self.nb_scenario = nb_scenario
         self._add_output('output')    
 
     def _process(self, inputs):
@@ -109,7 +154,9 @@ class PreProcess_multiple_scenario(GenericPE):
         inputs = map_multiple_scenario(inputs)
 
         #We sort the processing element in inputs to be
-        new_inputs = check_order(inputs)
+        new_inputs = check_order(inputs)        
+
+        #create_monitoring_file(new_inputs, self.param_workflow, self.nb_scenario)
 
         self.write('output', new_inputs)
 
@@ -182,6 +229,8 @@ class StandardDeviation(GenericPE):
 
         nc = Dataset(parameters['input']['out_file'])
 
+        #update_monitoring_file(self.name)
+
         #Extracting the time and change the time format from num to date time
         time = nc.variables['time']
         nc_time = netcdftime.utime(time.units, time.calendar)
@@ -210,6 +259,8 @@ class AverageData(GenericPE):
         ind_scenario = self.name.find("scenario_")
         name_scenario = self.name[ind_scenario::]
 
+        #update_monitoring_file(self.name)
+
         nc = Dataset(parameters['input']['out_file'])
 
         #Extracting the time and change the time format from num to date time
@@ -237,6 +288,9 @@ class CombineData(GenericPE):
         import numpy as np
 
         var = parameters['input'][1]
+
+        #update_monitoring_file(self.name)
+
         var = np.reshape(var, (var.shape[0], -1))
         result = np.mean(var, axis=1)
 
@@ -278,6 +332,8 @@ class CombineScenario(GenericPE):
             t = netcdftime.utime(self.time.units, self.time.calendar) 
             self.time = t.num2date(self.time[:]) 
 
+        #update_monitoring_file(self.name)
+
         self.mat[self.count,:]=inputs[name_scenario][1]
         self.count+=1
 
@@ -307,6 +363,8 @@ class PlotMultipleScenario(GenericPE):
         var = parameters[name_var][1]
         year_list = np.array([t.year for t in time])
         #year_array = np.tile(year_list,(len(var),1))
+
+        #update_monitoring_file(self.name)
 
         plt.figure()
         for i in range(len(var)):
@@ -352,6 +410,9 @@ class B2DROP(GenericPE):
         oc.put_file(upload_path, src_path)
 
         link_info = oc.share_file_with_link(upload_path)
+
+        #update_monitoring_file(self.name, special_info=link_info)
+
         print("Shared linked is: "+link_info.get_link())
 
 
@@ -519,7 +580,7 @@ class Multiple_scenario(Climate_Workflow):
 
     def multiple_scenario(self):
         #Main preprocessing element 
-        preprocess = PreProcess_multiple_scenario()
+        preprocess = PreProcess_multiple_scenario(self.param, self.nb_scenario)
         preprocess.name = "Workflow"
         self.preprocess = preprocess
         #Processing element to combine the multiple scenario
@@ -552,9 +613,9 @@ input_data = {
              "slice_mode": "JJA",
              "user_indice": None,
              "indice_name": "SU",
-             "in_files": [["https://esgdata.gfdl.noaa.gov/thredds/dodsC/gfdl_dataroot4/CMIP/NOAA-GFDL/GFDL-CM4/historical/r1i1p1f1/day/tas/gr1/v20180701/tas_day_GFDL-CM4_historical_r1i1p1f1_gr1_20100101-20141231.nc"],
-                ["https://esgdata.gfdl.noaa.gov/thredds/dodsC/gfdl_dataroot4/CMIP/NOAA-GFDL/GFDL-CM4/historical/r1i1p1f1/day/tas/gr2/v20180701/tas_day_GFDL-CM4_historical_r1i1p1f1_gr2_20100101-20141231.nc"]],
-             "var_name": "tas"
+             "in_files": [["https://b2drop.eudat.eu/s/Ab5KaFoszbMDHFj/download"],
+                ["https://b2drop.eudat.eu/s/Ab5KaFoszbMDHFj/download"]],
+             "var_name": "tasmax"
            },
  
           "Node_5_B2DROP":{
@@ -572,64 +633,6 @@ input_data = {
  }
 
 
-
 graph = Multiple_scenario(param=input_data)
 graph.multiple_scenario()
 
-"""
-ProvenanceType.REPOS_URL='http://'+os.getenv('SPROV_SERVICE_HOST')+':'+os.getenv('SPROV_SERVICE_PORT')+'/workflowexecutions/insert'
-ProvenanceType.PROV_EXPORT_URL='http://'+os.getenv('SPROV_SERVICE_HOST')+':'+os.getenv('SPROV_SERVICE_PORT')+'/workflowexecutions/'
-
-#Store to local path
-ProvenanceType.PROV_PATH='./prov-files/'
-
-#Size of the provenance bulk before sent to storage or sensor
-ProvenanceType.BULK_SIZE=1
-
-prov_config =  {
-    'provone:User': "cc4idev",
-    's-prov:description' : "enes_multiple_scenarios",
-    's-prov:workflowName': "enes_multiple_scenarios",
-    's-prov:workflowType': "climate:preprocess",
-    's-prov:workflowId'  : "workflow process",
-    's-prov:save-mode'   : 'service'         ,
-    's-prov:WFExecutionInputs':  [{
-        "url": "",
-        "mime-type": "text/json",
-        "name": "input_data"
-
-    }],
-    # defines the Provenance Types and Provenance Clusters for the Workflow Components
-   #  's-prov:componentsType' :
-   #      {self.calc_operation.getValue()+'_Spatial_MEAN': {'s-prov:type':(AccumulateFlow,),
-   #                                                        's-prov:prov-cluster':'enes:Processor'},
-   #       self.calc_operation.getValue()+'_Spatial_STD': {'s-prov:type':(AccumulateFlow,),
-   #                                                       's-prov:prov-cluster':'enes:Processor'},
-   #       self.calc_operation.getValue()+'_workflow': {'s-prov:type':(icclimInputParametersDataProvType,),
-   #                                                    's-prov:prov-cluster':'enes:dataHandler'},
-         #             'PE_filter_bandpass': {'s-prov:type':(SeismoPE,),
-         #                                                     's-prov:prov-cluster':'seis:Processor'},
-         #             'StoreStream':    {'s-prov:prov-cluster':'seis:DataHandler',
-         #                                's-prov:type':(SeismoPE,)},
-    #     }
-    #            's-prov:sel-rules': None
-}
-
-# rid='JUP_ENES_PREPOC_'+getUniqueId()
-
-# self.status.set("Initialising Provenance...", 25)
-
-#Initialise provenance storage to service:
-configure_prov_run(graph,
-                   provImpClass=(ProvenanceType,),
-                   input=prov_config['s-prov:WFExecutionInputs'],
-                   username=prov_config['provone:User'],
-                   runId=os.getenv('RUN_ID'),
-                   description=prov_config['s-prov:description'],
-                   workflowName=prov_config['s-prov:workflowName'],
-                   workflowType=prov_config['s-prov:workflowType'],
-                   workflowId=prov_config['s-prov:workflowId'],
-                   save_mode=prov_config['s-prov:save-mode'],
-                   # componentsType=prov_config['s-prov:componentsType']
-                   #                           sel_rules=prov_config['s-prov:sel-rules']
-                   )"""
