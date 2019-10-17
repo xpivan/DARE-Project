@@ -266,7 +266,6 @@ class AverageData(GenericPE):
         #Extracting the time and change the time format from num to date time
         time = nc.variables['time']
         nc_time = netcdftime.utime(time.units, time.calendar)
-        date_time = nc_time.num2date(time[:])
 
         var = nc.variables[parameters['input']['indice_name']][:]
         import numpy as np
@@ -328,9 +327,8 @@ class CombineScenario(GenericPE):
 
             #We move from num to date format because if we send a netcdf variable format we have this error:
             #*** NotImplementedError: Variable is not picklable
-            import netcdftime
-            t = netcdftime.utime(self.time.units, self.time.calendar) 
-            self.time = t.num2date(self.time[:]) 
+            import cftime
+            self.time = cftime.num2date(self.time[:], self.time.units, self.time.calendar) 
 
         #update_monitoring_file(self.name)
 
